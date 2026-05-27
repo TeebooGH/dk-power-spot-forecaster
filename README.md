@@ -52,6 +52,14 @@ This project uses `uv` for dependency management and environment isolation.
    source .venv/bin/activate
    ```
 
+## Repository Structure
+
+- `data/`: Raw and processed datasets.
+- `notebooks/`: Jupyter notebooks for exploratory data analysis and model development.
+- `src/`: Source code for data ingestion, feature engineering, and model training.
+- `models/`: Saved model artifacts and performance metrics.
+- `README.md`: Project overview and instructions.
+
 ## Project Roadmap
 
 This project is led by a team of five data scientists from Télécom SudParis (IP Paris), with a structured timeline for development:
