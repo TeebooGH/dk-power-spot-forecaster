@@ -11,6 +11,7 @@ Pipeline complet PyTorch :
   4. Entraînement avec Early Stopping sur validation temporelle
   5. Inférence sur Test 2024, dé-standardisation, métriques finales
 
+Auteur : Annie / Claude  —  Juin 2026
 Inspiré de : Kılıç et al. (2024), Dumas et al. (2021)
 """
 
@@ -119,24 +120,48 @@ def load_and_prepare(
 
 
 def compute_descale_params(
-    raw_train_path: str, target_col: str
-) -> Tuple[float, float]:
+    raw_train_path: str, scaled_train_path: str, target_col: str
+) -> Tuple[Optional[float], Optional[float]]:
     """
-    Recalcule la moyenne (μ) et l'écart-type (σ) de la variable cible
-    à partir du jeu brut d'entraînement, pour inverser le StandardScaler.
+    Détecte automatiquement si la cible a été standardisée dans le fichier
+    scalé, puis retourne (μ, σ) pour le descaling — ou (None, None) si la
+    cible est déjà en €/MWh bruts (pas de descaling nécessaire).
 
-    C'est la méthode la plus sûre : on repart de la source.
+    Diagnostic : une cible StandardScaler-transformée a mean ≈ 0 et std ≈ 1.
+    Si mean(target_scaled) >> 1, la cible n'a pas été touchée par le scaler.
     """
-    df_raw = pd.read_csv(raw_train_path)
-    mu  = df_raw[target_col].mean()
-    std = df_raw[target_col].std(ddof=0)  # ddof=0 → même convention que sklearn
-    print(f"[DESCALE] μ(SpotPriceEUR_train) = {mu:.4f} €/MWh")
-    print(f"[DESCALE] σ(SpotPriceEUR_train) = {std:.4f} €/MWh")
-    return mu, std
+    df_raw    = pd.read_csv(raw_train_path)
+    df_scaled = pd.read_csv(scaled_train_path)
+
+    raw_mu  = df_raw[target_col].mean()
+    raw_std = df_raw[target_col].std(ddof=0)
+
+    scaled_mu  = df_scaled[target_col].mean()
+    scaled_std = df_scaled[target_col].std(ddof=0)
+
+    print(f"[DESCALE] Train RAW    → μ = {raw_mu:.4f}, σ = {raw_std:.4f}")
+    print(f"[DESCALE] Train SCALED → μ = {scaled_mu:.4f}, σ = {scaled_std:.4f}")
+
+    # Si la cible dans le fichier scalé a un mean éloigné de 0,
+    # elle n'a PAS été standardisée → pas de descaling
+    if abs(scaled_mu) > 5.0 or scaled_std > 5.0:
+        print("[DESCALE] ⚠ La cible SpotPriceEUR n'est PAS standardisée "
+              "dans train_scaled.csv → descaling désactivé.")
+        return None, None
+
+    print("[DESCALE] ✓ Cible standardisée détectée → descaling actif.")
+    return raw_mu, raw_std
 
 
-def inverse_scale(arr: np.ndarray, mu: float, std: float) -> np.ndarray:
-    """Dé-standardise : x_real = x_scaled * σ + μ"""
+def inverse_scale(
+    arr: np.ndarray, mu: Optional[float], std: Optional[float]
+) -> np.ndarray:
+    """
+    Dé-standardise : x_real = x_scaled × σ + μ.
+    Si mu/std sont None, retourne l'array inchangé (cible déjà en €/MWh).
+    """
+    if mu is None or std is None:
+        return arr
     return arr * std + mu
 
 
@@ -519,9 +544,11 @@ def main():
     print(f"  Train    : {X_train_full.shape[0]:,} heures")
     print(f"  Test     : {X_test.shape[0]:,} heures")
 
-    # ── Paramètres de descaling ──
-    print("\n🔄 Calcul des paramètres de descaling (μ, σ depuis train_raw)...")
-    target_mu, target_std = compute_descale_params(cfg.TRAIN_RAW, cfg.TARGET_COL)
+    # ── Paramètres de descaling (auto-détection) ──
+    print("\n🔄 Détection du scaling de la cible...")
+    target_mu, target_std = compute_descale_params(
+        cfg.TRAIN_RAW, cfg.TRAIN_SCALED, cfg.TARGET_COL
+    )
 
     # ── Split Train / Validation (Time-Based, pas de shuffle !) ──
     n_total = len(Y_train_full)
@@ -591,7 +618,8 @@ def main():
     test_timestamps = test_meta["HourUTC"].iloc[cfg.LOOKBACK:].reset_index(drop=True)
 
     # ── Évaluation finale ──
-    metrics = evaluate(y_true_eur, y_pred_eur, label="Test 2024 (dé-standardisé)")
+    descale_label = "dé-standardisé" if target_mu is not None else "brut — pas de descaling"
+    metrics = evaluate(y_true_eur, y_pred_eur, label=f"Test 2024 ({descale_label})")
 
     # ── Graphiques ──
     print("\n📊 Génération des graphiques...")

@@ -2,7 +2,7 @@ import os
 import pandas as pd
 
 # Définition stricte du dossier contenant tes fichiers
-DATA_DIR = "/home/jean-marie/ML/EleccDKmarket/raw_data"
+DATA_DIR = "/home/jean-marie/dk-power-spot-forecaster/EleccDKmarket/raw_data"
 
 print(
     f"⏳ Lecture et assemblage des données brutes depuis le dossier : {DATA_DIR}"
