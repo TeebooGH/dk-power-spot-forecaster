@@ -1,0 +1,24 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Data folders to avoid pushing large data files
+
+data/raw
+data/processed
+venv/
+lstm_results/
+__pycache__/
+.ipynb_checkpoints/
+*.pdf
+raw_data/
+clean_data/
+final_data/
+*.joblib
